@@ -16,7 +16,8 @@
         "lot_step": 0.01,
         "max_lot": 10.0,
         "session_windows": [
-          {"start": "08:00", "end": "11:00", "timezone": "America/New_York"}
+          {"start": "08:00", "end": "16:00", "timezone": "Europe/London", "name": "London Session"},
+          {"start": "08:00", "end": "17:00", "timezone": "America/New_York", "name": "New York Session"}
         ],
         "strategy_params": {
           "swing_lookback": 2,
@@ -72,7 +73,8 @@
         "lot_step": 0.01,
         "max_lot": 10.0,
         "session_windows": [
-          {"start": "08:00", "end": "11:00", "timezone": "America/New_York"}
+          {"start": "08:00", "end": "16:00", "timezone": "Europe/London", "name": "London Session"},
+          {"start": "08:00", "end": "17:00", "timezone": "America/New_York", "name": "New York Session"}
         ],
         "strategy_params": {
           "swing_lookback": 2,
