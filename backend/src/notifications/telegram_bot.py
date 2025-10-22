@@ -52,3 +52,41 @@ class TelegramNotifier:
         """Send system alert"""
         formatted_message = f"🚨 {alert_type}: {message}"
         return await self.send_message(formatted_message)
+
+    async def send_update(self, update_type: str, data: dict) -> bool:
+        """Send general update notification"""
+        if not self.enabled:
+            logger.debug(f"Telegram update (disabled): {update_type}")
+            return False
+
+        try:
+            # Format the update message based on type
+            if update_type == "order_executed":
+                message = (
+                    f"✅ Order Executed\n"
+                    f"Symbol: {data.get('symbol', 'N/A')}\n"
+                    f"Side: {data.get('side', 'N/A')}\n"
+                    f"Entry: {data.get('entry', 'N/A')}\n"
+                    f"SL: {data.get('stop_loss', 'N/A')}\n"
+                    f"TP: {data.get('take_profit_1', 'N/A')}"
+                )
+            elif update_type == "position_closed":
+                message = (
+                    f"🔒 Position Closed\n"
+                    f"Symbol: {data.get('symbol', 'N/A')}\n"
+                    f"PnL: {data.get('pnl', 'N/A')}\n"
+                    f"R: {data.get('r_multiple', 'N/A')}"
+                )
+            elif update_type == "risk_warning":
+                message = (
+                    f"⚠️ Risk Warning\n"
+                    f"{data.get('message', 'Risk limit reached')}"
+                )
+            else:
+                message = f"📢 Update: {update_type}\n{str(data)}"
+
+            return await self.send_message(message)
+
+        except Exception as e:
+            logger.error(f"Failed to send Telegram update: {e}")
+            return False

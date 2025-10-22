@@ -51,7 +51,7 @@ def test_endpoints():
                 try:
                     data = response.json()
                     print(f"  Response: {data}")
-                except:
+                except (ValueError, Exception) as e:
                     print(f"  Response: {response.text[:100]}")
                 results[endpoint] = True
             else:

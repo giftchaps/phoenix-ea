@@ -3,7 +3,7 @@ Database Models
 SQLAlchemy models for the Phoenix EA system
 """
 
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Boolean, Text
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Boolean, Text, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
@@ -25,8 +25,10 @@ class SymbolDB(Base):
 class SignalDB(Base):
     """Signal database model"""
     __tablename__ = "signals"
-    
+
     id = Column(String(50), primary_key=True)
+    contract_id = Column(String(100))  # Deriv contract ID
+    ticket = Column(Integer)  # MT5 ticket number
     symbol = Column(String(20), nullable=False)
     timeframe = Column(String(5))
     side = Column(String(10))
@@ -35,14 +37,19 @@ class SignalDB(Base):
     take_profit_1 = Column(Float)
     take_profit_2 = Column(Float)
     take_profit_3 = Column(Float)
+    risk_reward = Column(Float)  # Risk/reward ratio
     confidence = Column(Float)
     sweep_type = Column(String(10))
     structure_type = Column(String(10))
     ob_present = Column(Boolean)
+    zone_id = Column(Integer)  # Zone identifier from strategy
     premium_discount = Column(String(10))
     h4_aligned = Column(Boolean)
     h1_bias = Column(String(10))
     atr_percentile = Column(Float)
+    lots = Column(Float)  # Position size
+    risk_r = Column(Float)  # Risk in R multiples
+    partial_plan = Column(JSON)  # Partial close plan as JSON
     posted_at = Column(DateTime, default=datetime.utcnow)
     status = Column(String(20), default='pending')
 

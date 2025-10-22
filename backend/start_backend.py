@@ -11,6 +11,10 @@ import time
 import signal
 import psutil
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 def check_port_available(port):
     """Check if a port is available"""
@@ -36,15 +40,16 @@ def check_database():
     try:
         import psycopg2
         conn = psycopg2.connect(
-            host="localhost",
-            port="5432",
-            database="phoenix_ea",
-            user="phoenix",
-            password="phoenix123"
+            host=os.getenv("DB_HOST", "localhost"),
+            port=os.getenv("DB_PORT", "5432"),
+            database=os.getenv("DB_NAME", "phoenix_ea"),
+            user=os.getenv("DB_USER", "phoenix"),
+            password=os.getenv("DB_PASSWORD", "phoenix123")
         )
         conn.close()
         return True
-    except Exception:
+    except Exception as e:
+        print(f"⚠️  Database connection failed: {e}")
         return False
 
 def start_database():
