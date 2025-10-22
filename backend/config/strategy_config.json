@@ -1,0 +1,304 @@
+{
+    "strategy": {
+      "name": "smc_sweep_bos_fvg_v2",
+      "version": "2.0.0",
+      "description": "Enhanced SMC strategy with OB, Zones, EQH/EQL, Premium/Discount"
+    },
+    
+    "symbols": {
+      "XAUUSD": {
+        "enabled": true,
+        "name": "Gold",
+        "pip_size": 0.01,
+        "tick_value": 1.0,
+        "spread_avg": 0.3,
+        "min_lot": 0.01,
+        "lot_step": 0.01,
+        "max_lot": 10.0,
+        "session_windows": [
+          {"start": "08:00", "end": "11:00", "timezone": "America/New_York"}
+        ],
+        "strategy_params": {
+          "swing_lookback": 2,
+          "sweep_min_pts": 5,
+          "reentry_max_candles": 3,
+          "ob_lookback": 15,
+          "ob_volume_pctl": 60,
+          "ob_required": true,
+          "zone_lookback": 50,
+          "min_impulse_atr": 2.0,
+          "eqh_eql_tolerance_pts": 5,
+          "premium_discount_filter": true,
+          "min_confidence": 0.65,
+          "atr_mult": 2.0,
+          "sl_buffer_pts": 2
+        },
+        "risk_params": {
+          "risk_pct_per_trade": 1.0,
+          "base_rr": 2.0,
+          "partial_plan": [
+            {"level": "1R", "close_pct": 0.5, "move_be": true},
+            {"level": "2R", "close_pct": 0.3, "trail": true},
+            {"level": "liquidity", "close_pct": 0.2, "trail": true}
+          ],
+          "be_trigger": "1R",
+          "trail_start": "1.5R",
+          "time_stop_minutes": 60
+        },
+        "filters": {
+          "atr_regime": {
+            "enabled": true,
+            "min_percentile": 40,
+            "max_percentile": 85
+          },
+          "news_guard": {
+            "enabled": true,
+            "block_minutes_before": 15,
+            "block_minutes_after": 15,
+            "events": ["NFP", "CPI", "FOMC", "GDP"]
+          },
+          "h4_bias_required": true,
+          "h1_bias_required": true
+        }
+      },
+      
+      "EURUSD": {
+        "enabled": true,
+        "name": "Euro Dollar",
+        "pip_size": 0.0001,
+        "tick_value": 1.0,
+        "spread_avg": 0.00015,
+        "min_lot": 0.01,
+        "lot_step": 0.01,
+        "max_lot": 10.0,
+        "session_windows": [
+          {"start": "08:00", "end": "11:00", "timezone": "America/New_York"}
+        ],
+        "strategy_params": {
+          "swing_lookback": 2,
+          "sweep_min_pts": 8,
+          "reentry_max_candles": 3,
+          "ob_lookback": 15,
+          "ob_volume_pctl": 60,
+          "ob_required": true,
+          "zone_lookback": 50,
+          "min_impulse_atr": 2.0,
+          "eqh_eql_tolerance_pts": 0.0008,
+          "premium_discount_filter": true,
+          "min_confidence": 0.65,
+          "atr_mult": 2.0,
+          "sl_buffer_pts": 5
+        },
+        "risk_params": {
+          "risk_pct_per_trade": 1.0,
+          "base_rr": 2.0,
+          "partial_plan": [
+            {"level": "1R", "close_pct": 0.5, "move_be": true},
+            {"level": "2R", "close_pct": 0.3, "trail": true},
+            {"level": "liquidity", "close_pct": 0.2, "trail": true}
+          ],
+          "be_trigger": "1R",
+          "trail_start": "1.5R",
+          "time_stop_minutes": 60
+        },
+        "filters": {
+          "atr_regime": {
+            "enabled": true,
+            "min_percentile": 40,
+            "max_percentile": 85
+          },
+          "news_guard": {
+            "enabled": true,
+            "block_minutes_before": 15,
+            "block_minutes_after": 15,
+            "events": ["NFP", "CPI", "FOMC", "ECB"]
+          },
+          "h4_bias_required": true,
+          "h1_bias_required": true
+        }
+      },
+      
+      "V75": {
+        "enabled": true,
+        "name": "Volatility 75 Index",
+        "pip_size": 0.01,
+        "tick_value": 0.1,
+        "spread_avg": 15,
+        "min_lot": 0.5,
+        "lot_step": 0.5,
+        "max_lot": 50.0,
+        "session_windows": [
+          {"start": "07:30", "end": "09:30", "timezone": "America/New_York"},
+          {"start": "13:30", "end": "15:00", "timezone": "America/New_York"}
+        ],
+        "strategy_params": {
+          "swing_lookback": 3,
+          "sweep_min_pts": 20,
+          "reentry_max_candles": 3,
+          "ob_lookback": 12,
+          "ob_volume_pctl": 55,
+          "ob_required": false,
+          "zone_lookback": 40,
+          "min_impulse_atr": 2.5,
+          "eqh_eql_tolerance_pts": 15,
+          "premium_discount_filter": true,
+          "min_confidence": 0.70,
+          "atr_mult": 2.5,
+          "sl_buffer_pts": 10
+        },
+        "risk_params": {
+          "risk_pct_per_trade": 1.5,
+          "base_rr": 2.0,
+          "partial_plan": [
+            {"level": "1R", "close_pct": 0.5, "move_be": true},
+            {"level": "2R", "close_pct": 0.5, "trail": false}
+          ],
+          "be_trigger": "1.2R",
+          "trail_start": "1.8R",
+          "time_stop_minutes": 30
+        },
+        "filters": {
+          "atr_regime": {
+            "enabled": true,
+            "min_percentile": 35,
+            "max_percentile": 90
+          },
+          "news_guard": {
+            "enabled": false
+          },
+          "h4_bias_required": false,
+          "h1_bias_required": true,
+          "avoid_hourly_open_minutes": 5
+        }
+      },
+      
+      "V50_1s": {
+        "enabled": true,
+        "name": "Volatility 50 (1s)",
+        "pip_size": 0.01,
+        "tick_value": 0.1,
+        "spread_avg": 10,
+        "min_lot": 0.5,
+        "lot_step": 0.5,
+        "max_lot": 50.0,
+        "session_windows": [
+          {"start": "07:30", "end": "09:30", "timezone": "America/New_York"},
+          {"start": "13:30", "end": "15:00", "timezone": "America/New_York"}
+        ],
+        "strategy_params": {
+          "swing_lookback": 3,
+          "sweep_min_pts": 15,
+          "reentry_max_candles": 3,
+          "ob_lookback": 12,
+          "ob_volume_pctl": 55,
+          "ob_required": false,
+          "zone_lookback": 40,
+          "min_impulse_atr": 2.0,
+          "eqh_eql_tolerance_pts": 10,
+          "premium_discount_filter": true,
+          "min_confidence": 0.70,
+          "atr_mult": 2.0,
+          "sl_buffer_pts": 8
+        },
+        "risk_params": {
+          "risk_pct_per_trade": 1.5,
+          "base_rr": 2.0,
+          "partial_plan": [
+            {"level": "1R", "close_pct": 0.5, "move_be": true},
+            {"level": "2R", "close_pct": 0.5, "trail": false}
+          ],
+          "be_trigger": "1.2R",
+          "trail_start": "1.8R",
+          "time_stop_minutes": 30
+        },
+        "filters": {
+          "atr_regime": {
+            "enabled": true,
+            "min_percentile": 35,
+            "max_percentile": 90
+          },
+          "news_guard": {
+            "enabled": false
+          },
+          "h4_bias_required": false,
+          "h1_bias_required": true,
+          "avoid_hourly_open_minutes": 5
+        }
+      }
+    },
+    
+    "global_risk_governance": {
+      "daily_stop_r": -3.0,
+      "max_concurrent_risk_r": 2.0,
+      "drawdown_throttle": {
+        "enabled": true,
+        "rolling_trades": 20,
+        "dd_threshold_r": 6.0,
+        "risk_reduction_factor": 0.5
+      },
+      "one_signal_per_symbol": true,
+      "max_daily_signals": 8
+    },
+    
+    "confidence_weights": {
+      "base_confidence": 0.50,
+      "structure_mss": 0.12,
+      "structure_bos": 0.05,
+      "ob_present_overlap": 0.10,
+      "fresh_zone_aligned": 0.15,
+      "sweep_cluster_eqh_eql": 0.20,
+      "sweep_single": 0.08,
+      "h4_aligned": 0.20,
+      "h1_aligned": 0.10,
+      "wrong_premium_discount": -0.15,
+      "multi_tested_zone": -0.10,
+      "conflicting_h4": -0.15
+    },
+    
+    "backtesting": {
+      "validation_gates": {
+        "min_profit_factor": 1.30,
+        "min_win_rate": 0.40,
+        "min_avg_rr": 2.0,
+        "max_drawdown": 0.12,
+        "min_trades_per_year": 150
+      },
+      "walk_forward": {
+        "train_months": 6,
+        "test_months": 2,
+        "cycles": 3,
+        "min_pass_cycles": 2
+      },
+      "monte_carlo": {
+        "iterations": 1000,
+        "confidence_level": 0.95
+      },
+      "broker_model": {
+        "slippage_pips": 1,
+        "commission_per_lot": 7.0
+      }
+    },
+    
+    "notifications": {
+      "telegram": {
+        "enabled": true,
+        "events": ["signal", "order_placed", "partial", "be_moved", "exit"]
+      },
+      "web_push": {
+        "enabled": true,
+        "events": ["signal", "exit"]
+      },
+      "email": {
+        "enabled": false,
+        "events": ["daily_summary", "risk_limit_hit"]
+      }
+    },
+    
+    "admin_settings": {
+      "shadow_mode": true,
+      "auto_execution": false,
+      "log_level": "INFO",
+      "chart_screenshots": true,
+      "performance_tracking": true
+    }
+  }
