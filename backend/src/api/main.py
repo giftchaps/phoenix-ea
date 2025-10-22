@@ -26,6 +26,7 @@ from src.notifications.telegram_bot import TelegramNotifier
 from src.data.deriv_client import DerivClient
 from src.risk.risk_manager import RiskManager
 from src.database.models import SessionLocal, SignalDB, TradeDB, SymbolDB
+from src.filters.market_filters import MarketFilters, create_sample_economic_calendar
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -125,18 +126,25 @@ class AdminConfigUpdate(BaseModel):
 @app.on_event("startup")
 async def startup_event():
     """Initialize services on startup"""
-    global strategy_engine, telegram_bot, deriv_client, risk_manager
-    
+    global strategy_engine, telegram_bot, deriv_client, risk_manager, market_filters, app_config
+
     logger.info("Starting Phoenix EA backend...")
-    
+
     # Load configuration
     with open("config/strategy_config.json", "r") as f:
-        config = json.load(f)
-    
+        app_config = json.load(f)
+
     # Initialize strategy engine
-    strategy_engine = SMCStrategyEngine(config["symbols"]["XAUUSD"]["strategy_params"])
+    strategy_engine = SMCStrategyEngine(app_config["symbols"]["XAUUSD"]["strategy_params"])
     logger.info("Strategy engine initialized")
-    
+
+    # Initialize market filters
+    market_filters = MarketFilters(app_config["symbols"]["XAUUSD"])
+    # Load economic calendar
+    calendar_events = create_sample_economic_calendar()
+    market_filters.load_economic_calendar(calendar_events)
+    logger.info("Market filters initialized")
+
     # Initialize Telegram bot
     telegram_bot = TelegramNotifier(
         bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
@@ -152,19 +160,20 @@ async def startup_event():
     )
     await deriv_client.connect()
     logger.info("Deriv client connected")
-    
+
     # Initialize risk manager
     risk_manager = RiskManager(
         daily_stop_r=-3.0,
         max_concurrent_r=2.0,
-        drawdown_threshold_r=6.0
+        drawdown_threshold_r=6.0,
+        rolling_trades_window=20
     )
     logger.info("Risk manager initialized")
-    
+
     # Start background tasks
     asyncio.create_task(signal_generation_loop())
     asyncio.create_task(position_monitoring_loop())
-    
+
     logger.info("✅ Phoenix EA backend ready!")
 
 
@@ -251,25 +260,57 @@ async def generate_signal(
     token: str = Depends(verify_token)
 ):
     """Generate new trading signal"""
-    
+
     # Check risk limits
     if not request.force and not risk_manager.can_trade():
         raise HTTPException(
             status_code=429,
             detail=f"Daily stop hit: {risk_manager.daily_pnl_r:.2f}R"
         )
-    
+
     # Fetch data
     try:
         # Get bars from data source
         m15_bars = await fetch_bars(request.symbol, "M15", 100)
         h1_bars = await fetch_bars(request.symbol, "H1", 50)
         h4_bars = await fetch_bars(request.symbol, "H4", 50)
-        
+
+        # Calculate ATR percentile
+        if hasattr(m15_bars, 'atr'):
+            current_atr = m15_bars['atr'].iloc[-1]
+            atr_percentile = (m15_bars['atr'] < current_atr).sum() / len(m15_bars) * 100
+        else:
+            current_atr = None
+            atr_percentile = None
+
+        # ✅ PRIORITY 1 FIX: Check market filters (News Guard + Session Windows + ATR Regime)
+        if not request.force:
+            filters_passed, filter_reasons = market_filters.check_all_filters(
+                timestamp=datetime.now(),
+                current_atr=current_atr,
+                atr_percentile=atr_percentile
+            )
+
+            if not filters_passed:
+                logger.info(f"❌ Signal blocked by filters: {', '.join(filter_reasons)}")
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Market filters blocked signal: {', '.join(filter_reasons)}"
+                )
+
+            logger.info(f"✅ Market filters passed: {', '.join(filter_reasons)}")
+
         # Get biases
         h4_bias = determine_bias(h4_bars)
         h1_bias = determine_bias(h1_bars)
-        
+
+        # Get effective risk percent (adjusted for drawdown throttle)
+        base_risk_pct = 1.0
+        effective_risk_pct = risk_manager.get_effective_risk_percent(base_risk_pct)
+
+        if effective_risk_pct < base_risk_pct:
+            logger.warning(f"⚠️  Risk reduced due to drawdown throttle: {base_risk_pct}% -> {effective_risk_pct}%")
+
         # Generate signal
         signal = strategy_engine.generate_signal(
             symbol=request.symbol,
@@ -278,22 +319,27 @@ async def generate_signal(
             h4_bias=h4_bias,
             h1_bias=h1_bias,
             account_balance=10000,  # Get from account
-            risk_pct=1.0
+            risk_pct=effective_risk_pct
         )
-        
+
         if signal:
             # Save to database
             db_signal = save_signal_to_db(signal)
-            
+
+            # Register trade with risk manager
+            risk_manager.register_trade(signal.id, signal.risk_r)
+
             # Send notifications
             background_tasks.add_task(telegram_bot.send_signal, signal.__dict__)
             background_tasks.add_task(broadcast_signal, signal.__dict__)
-            
+
             logger.info(f"Signal generated: {signal.id}")
             return SignalResponse(**signal.__dict__)
         else:
             return None
-            
+
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions
     except Exception as e:
         logger.error(f"Signal generation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -352,30 +398,53 @@ async def close_signal(
     token: str = Depends(verify_token)
 ):
     """Close position for a signal"""
-    
+
     db = SessionLocal()
     try:
         signal = db.query(SignalDB).filter(SignalDB.id == signal_id).first()
         if not signal:
             raise HTTPException(status_code=404, detail="Signal not found")
-        
+
         # Close position
         if 'V' in signal.symbol:
             result = await deriv_client.close_position(signal.contract_id, partial_pct)
         else:
             result = await close_mt5_position(signal.ticket, partial_pct)
-        
+
         if result['success']:
-            # Update status
+            # Calculate P&L in R multiples
+            pnl_dollars = result.get('pnl', 0.0)
+            entry_price = signal.entry
+            sl_distance = abs(signal.entry - signal.stop_loss)
+
+            # Calculate R multiple (assuming 1R = initial risk)
+            if sl_distance > 0:
+                pnl_r = pnl_dollars / (signal.lots * sl_distance * signal.risk_r)
+            else:
+                pnl_r = 0.0
+
+            # Update risk manager
             if partial_pct >= 1.0:
+                # Full close - unregister trade and update metrics
+                risk_manager.unregister_trade(signal_id)
+                risk_manager.update_trade_result(pnl_dollars, pnl_r)
                 signal.status = SignalStatus.CLOSED
-            
+            else:
+                # Partial close - reduce active risk proportionally
+                if signal_id in risk_manager.active_trades:
+                    original_risk = risk_manager.active_trades[signal_id]
+                    reduced_risk = original_risk * (1 - partial_pct)
+                    risk_manager.active_trades[signal_id] = reduced_risk
+                    risk_manager.active_risk_r = sum(risk_manager.active_trades.values())
+
             db.commit()
-            
-            return {"success": True, "pnl": result.get('pnl')}
+
+            logger.info(f"Position closed: {signal_id} ({partial_pct*100}%) - P&L: ${pnl_dollars:.2f} ({pnl_r:.2f}R)")
+
+            return {"success": True, "pnl": pnl_dollars, "pnl_r": pnl_r}
         else:
             raise HTTPException(status_code=500, detail=result.get('error'))
-            
+
     finally:
         db.close()
 
