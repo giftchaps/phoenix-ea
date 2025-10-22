@@ -12,13 +12,21 @@ logger = logging.getLogger(__name__)
 class RiskManager:
     """Risk management system"""
     
-    def __init__(self, max_risk_per_trade: float = 0.02, max_daily_risk: float = 0.05):
+    def __init__(self, max_risk_per_trade: float = 0.02, max_daily_risk: float = 0.05,
+                 daily_stop_r: float = -3.0, max_concurrent_r: float = 2.0,
+                 drawdown_threshold_r: float = 6.0):
         self.max_risk_per_trade = max_risk_per_trade
         self.max_daily_risk = max_daily_risk
         self.daily_pnl = 0.0
+        self.daily_pnl_r = 0.0  # Daily PnL in R multiples
         self.trade_count = 0
-        
-        logger.info(f"Risk Manager initialized - Max trade risk: {max_risk_per_trade}, Max daily risk: {max_daily_risk}")
+        self.daily_stop_r = daily_stop_r  # Daily stop loss in R (e.g., -3.0R)
+        self.max_concurrent_r = max_concurrent_r  # Max concurrent risk in R
+        self.drawdown_threshold_r = drawdown_threshold_r  # Drawdown threshold in R
+        self.active_trades_count = 0
+
+        logger.info(f"Risk Manager initialized - Max trade risk: {max_risk_per_trade}, "
+                   f"Max daily risk: {max_daily_risk}, Daily stop: {daily_stop_r}R")
     
     def calculate_position_size(self, account_balance: float, stop_loss_distance: float, 
                               risk_percent: float = None) -> float:
@@ -37,11 +45,30 @@ class RiskManager:
         if trade_risk > self.max_risk_per_trade:
             logger.warning(f"Trade risk {trade_risk} exceeds max per trade {self.max_risk_per_trade}")
             return False
-        
+
         if abs(self.daily_pnl) > self.max_daily_risk:
             logger.warning(f"Daily PnL {self.daily_pnl} exceeds max daily risk {self.max_daily_risk}")
             return False
-        
+
+        return True
+
+    def can_trade(self) -> bool:
+        """Check if trading is allowed based on current risk status"""
+        # Check if daily stop loss has been hit
+        if self.daily_pnl_r <= self.daily_stop_r:
+            logger.warning(f"Daily stop loss hit: {self.daily_pnl_r:.2f}R (limit: {self.daily_stop_r}R)")
+            return False
+
+        # Check if drawdown threshold exceeded
+        if abs(self.daily_pnl_r) >= abs(self.drawdown_threshold_r):
+            logger.warning(f"Drawdown threshold exceeded: {self.daily_pnl_r:.2f}R (threshold: {self.drawdown_threshold_r}R)")
+            return False
+
+        # Check if max concurrent risk exceeded
+        if self.active_trades_count >= self.max_concurrent_r:
+            logger.warning(f"Max concurrent trades reached: {self.active_trades_count} (max: {self.max_concurrent_r})")
+            return False
+
         return True
     
     def update_trade_result(self, pnl: float):
@@ -55,8 +82,14 @@ class RiskManager:
         """Get current risk metrics"""
         return {
             "daily_pnl": self.daily_pnl,
+            "daily_pnl_r": self.daily_pnl_r,
             "trade_count": self.trade_count,
+            "active_trades_count": self.active_trades_count,
             "max_risk_per_trade": self.max_risk_per_trade,
             "max_daily_risk": self.max_daily_risk,
-            "risk_utilization": abs(self.daily_pnl) / self.max_daily_risk if self.max_daily_risk > 0 else 0
+            "daily_stop_r": self.daily_stop_r,
+            "max_concurrent_r": self.max_concurrent_r,
+            "drawdown_threshold_r": self.drawdown_threshold_r,
+            "risk_utilization": abs(self.daily_pnl) / self.max_daily_risk if self.max_daily_risk > 0 else 0,
+            "can_trade": self.can_trade()
         }

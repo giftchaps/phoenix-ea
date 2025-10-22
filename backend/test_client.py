@@ -36,7 +36,7 @@ def test_server():
                     try:
                         data = response.json()
                         print(f"  Response: {json.dumps(data, indent=2)}")
-                    except:
+                    except (json.JSONDecodeError, ValueError) as e:
                         print(f"  Response: {response.text[:100]}...")
                 results[endpoint] = True
             else:

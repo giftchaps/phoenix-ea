@@ -81,32 +81,45 @@ class Zone:
 @dataclass
 class Signal:
     """Trading signal output"""
-    symbol: str
-    timeframe: str
-    side: Literal["LONG", "SHORT"]
-    entry: float
-    stop_loss: float
-    take_profit_1: float  # +1R
-    take_profit_2: float  # +2R or liquidity
-    take_profit_3: Optional[float]  # Runner to far liquidity
-    risk_reward: float
-    confidence: float
-    posted_at: datetime
+    id: Optional[str] = None  # Unique signal identifier
+    contract_id: Optional[str] = None  # Deriv contract ID
+    ticket: Optional[int] = None  # MT5 ticket number
+    symbol: str = ""
+    timeframe: str = ""
+    side: Literal["LONG", "SHORT"] = "LONG"
+    entry: float = 0.0
+    stop_loss: float = 0.0
+    take_profit_1: float = 0.0  # +1R
+    take_profit_2: float = 0.0  # +2R or liquidity
+    take_profit_3: Optional[float] = None  # Runner to far liquidity
+    risk_reward: float = 0.0
+    confidence: float = 0.0
+    posted_at: Optional[datetime] = None
     
     # Metadata for explainability
-    sweep_type: str  # "single" | "EQH" | "EQL"
-    structure_type: str  # "BOS" | "MSS"
-    ob_present: bool
-    zone_id: Optional[int]
-    premium_discount: str  # "premium" | "discount" | "neutral"
-    h4_aligned: bool
-    h1_bias: str
-    atr_percentile: float
-    
+    sweep_type: str = "single"  # "single" | "EQH" | "EQL"
+    structure_type: str = "BOS"  # "BOS" | "MSS"
+    ob_present: bool = False
+    zone_id: Optional[int] = None
+    premium_discount: str = "neutral"  # "premium" | "discount" | "neutral"
+    h4_aligned: bool = False
+    h1_bias: str = "neutral"
+    atr_percentile: float = 0.0
+
     # Risk management
-    lots: float
-    risk_r: float
-    partial_plan: dict
+    lots: float = 0.0
+    risk_r: float = 1.0
+    partial_plan: Optional[dict] = None
+
+    def __post_init__(self):
+        """Generate ID and set defaults if not provided"""
+        if self.id is None:
+            import uuid
+            self.id = str(uuid.uuid4())
+        if self.posted_at is None:
+            self.posted_at = datetime.now()
+        if self.partial_plan is None:
+            self.partial_plan = {}
 
 
 class SMCStrategyEngine:
