@@ -102,16 +102,30 @@ class ExecuteSignalRequest(BaseModel):
 
 
 class StatsResponse(BaseModel):
-    total_signals: int
+    today_signals: int
     active_positions: int
-    today_pnl_r: float
-    today_pnl_usd: float
+    total_pnl_r: float
     win_rate: float
     profit_factor: float
-    max_drawdown_r: float
-    sharpe_ratio: float
-    trades_this_week: int
-    trades_this_month: int
+    total_trades: int
+    winning_trades: int
+    losing_trades: int
+
+
+class RiskMetricsResponse(BaseModel):
+    daily_pnl: float
+    daily_pnl_r: float
+    trade_count: int
+    active_trades_count: int
+    active_risk_r: float
+    max_risk_per_trade: float
+    max_daily_risk: float
+    daily_stop_r: float
+    max_concurrent_r: float
+    drawdown_threshold_r: float
+    risk_utilization: float
+    risk_reduction_active: bool
+    can_trade: bool
 
 
 class AdminConfigUpdate(BaseModel):
@@ -519,20 +533,45 @@ async def get_statistics(
             sharpe = 0
         
         return StatsResponse(
-            total_signals=total_signals,
+            today_signals=len(today_trades),
             active_positions=active_positions,
-            today_pnl_r=today_pnl_r,
-            today_pnl_usd=today_pnl_usd,
+            total_pnl_r=sum(t.pnl_r for t in trades),
             win_rate=win_rate,
             profit_factor=profit_factor,
-            max_drawdown_r=max_drawdown_r,
-            sharpe_ratio=sharpe,
-            trades_this_week=len([t for t in trades if t.exit_time >= now - timedelta(days=7)]),
-            trades_this_month=len([t for t in trades if t.exit_time >= now - timedelta(days=30)])
+            total_trades=total_signals,
+            winning_trades=len(winning_trades),
+            losing_trades=len(losing_trades)
         )
         
     finally:
         db.close()
+
+
+@app.get("/api/v1/risk/metrics", response_model=RiskMetricsResponse)
+async def get_risk_metrics(token: str = Depends(verify_token)):
+    """Get current risk management metrics"""
+
+    if not risk_manager:
+        raise HTTPException(status_code=500, detail="Risk manager not initialized")
+
+    # Calculate risk utilization
+    risk_utilization = risk_manager.active_risk_r / risk_manager.max_concurrent_r if risk_manager.max_concurrent_r > 0 else 0
+
+    return RiskMetricsResponse(
+        daily_pnl=risk_manager.daily_pnl,
+        daily_pnl_r=risk_manager.daily_pnl_r,
+        trade_count=risk_manager.trade_count,
+        active_trades_count=risk_manager.active_trades_count,
+        active_risk_r=risk_manager.active_risk_r,
+        max_risk_per_trade=risk_manager.max_risk_per_trade,
+        max_daily_risk=risk_manager.max_daily_risk,
+        daily_stop_r=risk_manager.daily_stop_r,
+        max_concurrent_r=risk_manager.max_concurrent_r,
+        drawdown_threshold_r=risk_manager.drawdown_threshold_r,
+        risk_utilization=risk_utilization,
+        risk_reduction_active=risk_manager.risk_reduction_active,
+        can_trade=risk_manager.can_trade()
+    )
 
 
 # Admin endpoints
