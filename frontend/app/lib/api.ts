@@ -13,10 +13,24 @@ import type {
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000/ws';
 
+// Custom error class for API errors
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    public statusText: string,
+    public detail?: string
+  ) {
+    super(`API Error ${status}: ${statusText}${detail ? ` - ${detail}` : ''}`);
+    this.name = 'ApiError';
+  }
+}
+
 // API client class
 export class ApiClient {
   private baseUrl: string;
   private authToken: string | null = null;
+  private maxRetries = 3;
+  private retryDelay = 1000;
 
   constructor(baseUrl: string = API_BASE_URL) {
     this.baseUrl = baseUrl;
@@ -27,10 +41,11 @@ export class ApiClient {
     this.authToken = token;
   }
 
-  // Generic request method
+  // Generic request method with retry logic
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    retryCount = 0
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
 
@@ -44,16 +59,40 @@ export class ApiClient {
       headers['Authorization'] = `Bearer ${this.authToken}`;
     }
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers,
+      });
 
-    if (!response.ok) {
-      throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+      if (!response.ok) {
+        let errorDetail: string | undefined;
+        try {
+          const errorData = await response.json();
+          errorDetail = errorData.detail || errorData.message;
+        } catch {
+          // If response is not JSON, use status text
+          errorDetail = response.statusText;
+        }
+
+        throw new ApiError(response.status, response.statusText, errorDetail);
+      }
+
+      return response.json();
+    } catch (error) {
+      // Retry on network errors or 5xx errors
+      if (
+        retryCount < this.maxRetries &&
+        (error instanceof TypeError || // Network error
+          (error instanceof ApiError && error.status >= 500))
+      ) {
+        console.warn(`Request failed, retrying (${retryCount + 1}/${this.maxRetries})...`);
+        await new Promise(resolve => setTimeout(resolve, this.retryDelay * (retryCount + 1)));
+        return this.request<T>(endpoint, options, retryCount + 1);
+      }
+
+      throw error;
     }
-
-    return response.json();
   }
 
   // Get all active signals
@@ -108,18 +147,33 @@ export class ApiClient {
     });
   }
 
-  // Get system status
-  async getSystemStatus(): Promise<SystemStatus> {
-    return this.request<SystemStatus>('/status');
+  // Get system status (health check)
+  async getSystemStatus(): Promise<{ status: string; timestamp: string }> {
+    // Use the /health endpoint which doesn't require /api/v1 prefix
+    const url = this.baseUrl.replace('/api/v1', '') + '/health';
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new ApiError(response.status, response.statusText);
+    }
+    return response.json();
   }
 
   // Get risk metrics
   async getRiskMetrics(): Promise<RiskMetrics> {
-    return this.request<RiskMetrics>('/risk');
+    return this.request<RiskMetrics>('/risk/metrics');
   }
 
   // Get statistics
-  async getStats(): Promise<any> {
+  async getStats(): Promise<{
+    today_signals: number;
+    active_positions: number;
+    total_pnl_r: number;
+    win_rate: number;
+    profit_factor: number;
+    total_trades: number;
+    winning_trades: number;
+    losing_trades: number;
+  }> {
     return this.request('/stats');
   }
 

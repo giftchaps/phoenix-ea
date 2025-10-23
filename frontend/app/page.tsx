@@ -1,5 +1,5 @@
-import PhoenixDashboard from './components/Dashboard';
+import EnhancedDashboard from './components/EnhancedDashboard';
 
 export default function Home() {
-  return <PhoenixDashboard />;
+  return <EnhancedDashboard />;
 }
